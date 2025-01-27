@@ -33,6 +33,7 @@
         <p><strong>Length of Last Trace:</strong> <span id="lastLength">N/A</span></p>
         <p><strong>Corner Angles:</strong> <span id="cornerAngles">N/A</span></p>
         <p><strong>Side Lengths:</strong> <span id="sideLengths">N/A</span></p>
+        <p><strong>Ratio of Second Last and Last Trace Lengths:</strong> <span id="traceRatio">N/A</span></p>
     </div>
 
     <script>
@@ -49,43 +50,56 @@
             return { theta, r, rC, thetaDiscrete, rDiscrete, rCDiscrete };
         }
 
-        // Function to calculate the geometric properties of the last parallelogram
+        // Function to calculate the geometric properties of the last and second last parallelogram
         function calculateLastTraceGeometry(thetaDiscrete, rDiscrete, rCDiscrete) {
             const n = thetaDiscrete.length - 1;
-            if (n < 1) return { length: "N/A", angles: "N/A", sides: "N/A" };
+            if (n < 2) return { length: "N/A", angles: "N/A", sides: "N/A", ratio: "N/A" };
 
             const x = i => rDiscrete[i] * Math.cos(thetaDiscrete[i]);
             const y = i => rDiscrete[i] * Math.sin(thetaDiscrete[i]);
             const xc = i => rCDiscrete[i] * Math.cos(thetaDiscrete[i]);
             const yc = i => rCDiscrete[i] * Math.sin(thetaDiscrete[i]);
 
-            const corners = [
-                [x(n - 1), y(n - 1)],
-                [xc(n - 1), yc(n - 1)],
-                [xc(n), yc(n)],
-                [x(n), y(n)]
-            ];
+            const calculateGeometry = (index) => {
+                const corners = [
+                    [x(index - 1), y(index - 1)],
+                    [xc(index - 1), yc(index - 1)],
+                    [xc(index), yc(index)],
+                    [x(index), y(index)]
+                ];
 
-            const sides = corners.map((point, i) => {
-                const next = corners[(i + 1) % 4];
-                return Math.sqrt((point[0] - next[0]) ** 2 + (point[1] - next[1]) ** 2);
-            });
+                const sides = corners.map((point, i) => {
+                    const next = corners[(i + 1) % 4];
+                    return Math.sqrt((point[0] - next[0]) ** 2 + (point[1] - next[1]) ** 2);
+                });
 
-            const angles = corners.map((_, i) => {
-                const prev = corners[(i + 3) % 4];
-                const next = corners[(i + 1) % 4];
-                const v1 = [prev[0] - corners[i][0], prev[1] - corners[i][1]];
-                const v2 = [next[0] - corners[i][0], next[1] - corners[i][1]];
-                const dot = v1[0] * v2[0] + v1[1] * v2[1];
-                const mag1 = Math.sqrt(v1[0] ** 2 + v1[1] ** 2);
-                const mag2 = Math.sqrt(v2[0] ** 2 + v2[1] ** 2);
-                return Math.acos(dot / (mag1 * mag2)) * (180 / Math.PI);
-            });
+                const angles = corners.map((_, i) => {
+                    const prev = corners[(i + 3) % 4];
+                    const next = corners[(i + 1) % 4];
+                    const v1 = [prev[0] - corners[i][0], prev[1] - corners[i][1]];
+                    const v2 = [next[0] - corners[i][0], next[1] - corners[i][1]];
+                    const dot = v1[0] * v2[0] + v1[1] * v2[1];
+                    const mag1 = Math.sqrt(v1[0] ** 2 + v1[1] ** 2);
+                    const mag2 = Math.sqrt(v2[0] ** 2 + v2[1] ** 2);
+                    return Math.acos(dot / (mag1 * mag2)) * (180 / Math.PI);
+                });
+
+                return {
+                    length: sides.reduce((sum, side) => sum + side, 0).toFixed(2),
+                    angles: angles.map(a => a.toFixed(2)),
+                    sides: sides.map(s => s.toFixed(2))
+                };
+            };
+
+            const lastGeometry = calculateGeometry(n);
+            const secondLastGeometry = calculateGeometry(n - 1);
+            const ratio = (secondLastGeometry.length / lastGeometry.length).toFixed(2);
 
             return {
-                length: sides.reduce((sum, side) => sum + side, 0).toFixed(2),
-                angles: angles.map(a => a.toFixed(2)),
-                sides: sides.map(s => s.toFixed(2))
+                length: lastGeometry.length,
+                angles: lastGeometry.angles,
+                sides: lastGeometry.sides,
+                ratio: ratio
             };
         }
 
@@ -144,6 +158,7 @@
             document.getElementById('lastLength').innerText = geometry.length;
             document.getElementById('cornerAngles').innerText = geometry.angles.join(", ");
             document.getElementById('sideLengths').innerText = geometry.sides.join(", ");
+            document.getElementById('traceRatio').innerText = geometry.ratio;
         }
 
         // Initial parameters
