@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Logarithmic Spiral</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+
+<body>
+    <h1>Interactive Logarithmic Spiral</h1>
+    <div id="plot" style="width: 100%; height: 60vh;"></div>
+
+    <div>
+        <label for="scale">Scale (a):</label>
+        <input type="range" id="scale" min="0.1" max="2" step="0.1" value="1">
+        <span id="scaleValue">1</span>
+        <br>
+
+        <label for="growth">Growth (b):</label>
+        <input type="range" id="growth" min="0.1" max="0.5" step="0.01" value="0.2">
+        <span id="growthValue">0.2</span>
+        <br>
+
+        <label for="step">Discretization Step (Δθ, degrees):</label>
+        <input type="range" id="step" min="10" max="60" step="1" value="30">
+        <span id="stepValue">30</span>
+    </div>
+
+    <h2>Geometric Specifications of the Last Trace</h2>
+    <div>
+        <p><strong>Length of Last Trace:</strong> <span id="lastLength">N/A</span></p>
+        <p><strong>Corner Angles:</strong> <span id="cornerAngles">N/A</span></p>
+        <p><strong>Side Lengths:</strong> <span id="sideLengths">N/A</span></p>
+    </div>
+
+    <script>
+        // Function to compute spiral data
+        function computeSpiral(a, b, deltaTheta) {
+            const theta = Array.from({ length: 100 }, (_, i) => i * (4 * Math.PI / 100));
+            const r = theta.map(t => a * Math.exp(b * t));
+            const rC = theta.map(t => (a * Math.exp(b * t) + a * Math.exp(b * (t + 2 * Math.PI))) / 2);
+
+            const thetaDiscrete = Array.from({ length: Math.ceil((4 * Math.PI) / deltaTheta) }, (_, i) => i * deltaTheta);
+            const rDiscrete = thetaDiscrete.map(t => a * Math.exp(b * t));
+            const rCDiscrete = thetaDiscrete.map(t => (a * Math.exp(b * t) + a * Math.exp(b * (t + 2 * Math.PI))) / 2);
+
+            return { theta, r, rC, thetaDiscrete, rDiscrete, rCDiscrete };
+        }
+
+        // Function to calculate the geometric properties of the last parallelogram
+        function calculateLastTraceGeometry(thetaDiscrete, rDiscrete, rCDiscrete) {
+            const n = thetaDiscrete.length - 1;
+            if (n < 1) return { length: "N/A", angles: "N/A", sides: "N/A" };
+
+            const x = i => rDiscrete[i] * Math.cos(thetaDiscrete[i]);
+            const y = i => rDiscrete[i] * Math.sin(thetaDiscrete[i]);
+            const xc = i => rCDiscrete[i] * Math.cos(thetaDiscrete[i]);
+            const yc = i => rCDiscrete[i] * Math.sin(thetaDiscrete[i]);
+
+            const corners = [
+                [x(n - 1), y(n - 1)],
+                [xc(n - 1), yc(n - 1)],
+                [xc(n), yc(n)],
+                [x(n), y(n)]
+            ];
+
+            const sides = corners.map((point, i) => {
+                const next = corners[(i + 1) % 4];
+                return Math.sqrt((point[0] - next[0]) ** 2 + (point[1] - next[1]) ** 2);
+            });
+
+            const angles = corners.map((_, i) => {
+                const prev = corners[(i + 3) % 4];
+                const next = corners[(i + 1) % 4];
+                const v1 = [prev[0] - corners[i][0], prev[1] - corners[i][1]];
+                const v2 = [next[0] - corners[i][0], next[1] - corners[i][1]];
+                const dot = v1[0] * v2[0] + v1[1] * v2[1];
+                const mag1 = Math.sqrt(v1[0] ** 2 + v1[1] ** 2);
+                const mag2 = Math.sqrt(v2[0] ** 2 + v2[1] ** 2);
+                return Math.acos(dot / (mag1 * mag2)) * (180 / Math.PI);
+            });
+
+            return {
+                length: sides.reduce((sum, side) => sum + side, 0).toFixed(2),
+                angles: angles.map(a => a.toFixed(2)),
+                sides: sides.map(s => s.toFixed(2))
+            };
+        }
+
+        // Function to update the plot
+        function updatePlot(a, b, deltaTheta) {
+            const deltaThetaRad = (deltaTheta * Math.PI) / 180;
+            const data = computeSpiral(a, b, deltaThetaRad);
+            const geometry = calculateLastTraceGeometry(data.thetaDiscrete, data.rDiscrete, data.rCDiscrete);
+
+            const originalSpiral = {
+                type: 'scatterpolar',
+                mode: 'lines',
+                r: data.r,
+                theta: data.theta.map(t => (t * 180) / Math.PI),
+                name: 'Original Spiral'
+            };
+
+            const centralSpiral = {
+                type: 'scatterpolar',
+                mode: 'lines',
+                r: data.rC,
+                theta: data.theta.map(t => (t * 180) / Math.PI),
+                name: 'Central Spiral'
+            };
+
+            const segments = data.thetaDiscrete.map((t, i) => {
+                if (i === data.thetaDiscrete.length - 1) return null;
+                return {
+                    type: 'scatterpolar',
+                    mode: 'lines',
+                    r: [data.rDiscrete[i], data.rCDiscrete[i], data.rCDiscrete[i + 1], data.rDiscrete[i + 1], data.rDiscrete[i]],
+                    theta: [
+                        (data.thetaDiscrete[i] * 180) / Math.PI,
+                        (data.thetaDiscrete[i] * 180) / Math.PI,
+                        (data.thetaDiscrete[i + 1] * 180) / Math.PI,
+                        (data.thetaDiscrete[i + 1] * 180) / Math.PI,
+                        (data.thetaDiscrete[i] * 180) / Math.PI
+                    ],
+                    fill: 'toself',
+                    fillcolor: 'rgba(100, 100, 255, 0.2)',
+                    line: { color: 'purple' },
+                    showlegend: false
+                };
+            }).filter(Boolean);
+
+            const layout = {
+                polar: {
+                    radialaxis: { visible: true }
+                },
+                title: 'Interactive Logarithmic Spiral'
+            };
+
+            Plotly.newPlot('plot', [originalSpiral, centralSpiral, ...segments], layout);
+
+            // Update geometric specifications
+            document.getElementById('lastLength').innerText = geometry.length;
+            document.getElementById('cornerAngles').innerText = geometry.angles.join(", ");
+            document.getElementById('sideLengths').innerText = geometry.sides.join(", ");
+        }
+
+        // Initial parameters
+        let a = 1;
+        let b = 0.2;
+        let deltaTheta = 30;
+
+        // Initial plot
+        updatePlot(a, b, deltaTheta);
+
+        // Add event listeners to sliders
+        document.getElementById('scale').addEventListener('input', event => {
+            a = parseFloat(event.target.value);
+            document.getElementById('scaleValue').innerText = a;
+            updatePlot(a, b, deltaTheta);
+        });
+
+        document.getElementById('growth').addEventListener('input', event => {
+            b = parseFloat(event.target.value);
+            document.getElementById('growthValue').innerText = b;
+            updatePlot(a, b, deltaTheta);
+        });
+
+        document.getElementById('step').addEventListener('input', event => {
+            deltaTheta = parseFloat(event.target.value);
+            document.getElementById('stepValue').innerText = deltaTheta;
+            updatePlot(a, b, deltaTheta);
+        });
+    </script>
+</body>
+
+</html>
